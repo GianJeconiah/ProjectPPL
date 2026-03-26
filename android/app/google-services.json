@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "520123329954",
+    "project_id": "sportsq-4d729",
+    "storage_bucket": "sportsq-4d729.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:520123329954:android:3c711fd3458e8ebed0d6fb",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxNHheR6u6n8q9EfQTS9kkCQEXNPzXMzI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
