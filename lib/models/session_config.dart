@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class SessionConfig {
   final String id;
   final String name;
@@ -28,7 +30,7 @@ class SessionConfig {
       restSeconds: map['restSeconds'] ?? 10,
       cueType: map['cueType'] ?? 'all',
       userId: map['userId'] ?? '',
-      createdAt: (map['createdAt'] as dynamic)?.toDate() ?? DateTime.now(),
+      createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
 
@@ -39,6 +41,7 @@ class SessionConfig {
         'restSeconds': restSeconds,
         'cueType': cueType,
         'userId': userId,
-        'createdAt': createdAt,
+        // Use Firestore Timestamp — writing a raw DateTime throws an error.
+        'createdAt': Timestamp.fromDate(createdAt),
       };
 }

@@ -22,6 +22,10 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
     with TickerProviderStateMixin {
   late int _secondsLeft;
   int _currentSet = 1;
+
+  /// Tracks how many sets have been fully completed (work phase finished).
+  int _setsCompleted = 0;
+
   SessionPhase _phase = SessionPhase.idle;
   Timer? _timer;
   Timer? _cueTimer;
@@ -57,11 +61,14 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
     super.dispose();
   }
 
+  // ── Session control ───────────────────────────────────────────────────────
+
   void _start() {
     setState(() {
       _phase = SessionPhase.work;
       _secondsLeft = widget.config.workSeconds;
       _currentSet = 1;
+      _setsCompleted = 0;
       _paused = false;
     });
     _startTimer();
@@ -82,6 +89,9 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
   void _onPhaseComplete() {
     _cueTimer?.cancel();
     if (_phase == SessionPhase.work) {
+      // Increment completed-set count now that this work phase is done.
+      _setsCompleted++;
+
       if (_currentSet >= widget.config.sets) {
         _completeSession();
       } else {
@@ -103,6 +113,7 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
   }
 
   void _scheduleRandomCue() {
+    if (widget.config.workSeconds <= 2) return;
     final delay = _random.nextInt(widget.config.workSeconds - 2) + 1;
     _cueTimer = Timer(Duration(seconds: delay), () {
       if (_phase == SessionPhase.work && !_paused) _triggerCue();
@@ -110,37 +121,40 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
   }
 
   void _triggerCue() {
-    if (widget.config.cueType == 'visual' || widget.config.cueType == 'all') {
+    if (widget.config.cueType == 'visual' ||
+        widget.config.cueType == 'all') {
       setState(() => _showCueFlash = true);
       _flashController.forward(from: 0);
-      Future.delayed(const Duration(milliseconds: 400),
-          () { if (mounted) setState(() => _showCueFlash = false); });
+      Future.delayed(const Duration(milliseconds: 400), () {
+        if (mounted) setState(() => _showCueFlash = false);
+      });
     }
     _cueService.triggerCue(widget.config.cueType);
   }
 
-  void _togglePause() {
-    setState(() => _paused = !_paused);
-  }
+  void _togglePause() => setState(() => _paused = !_paused);
 
   void _stop() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title: const Text('Stop Session?', style: TextStyle(color: Colors.white)),
+        title: const Text('Stop Session?',
+            style: TextStyle(color: Colors.white)),
         content: const Text('Your progress will be saved.',
             style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Continue', style: TextStyle(color: Color(0xFF00E5FF)))),
+              child: const Text('Continue',
+                  style: TextStyle(color: Color(0xFF00E5FF)))),
           TextButton(
               onPressed: () {
                 Navigator.pop(context);
                 _completeSession(stopped: true);
               },
-              child: const Text('Stop', style: TextStyle(color: Colors.redAccent))),
+              child: const Text('Stop',
+                  style: TextStyle(color: Colors.redAccent))),
         ],
       ),
     );
@@ -148,13 +162,16 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
 
   Future<void> _completeSession({bool stopped = false}) async {
     _timer?.cancel();
-    _cueTimer?.cancel();
+    _cueTimer?.cancel(); // always cancel cue timer on completion
     setState(() => _phase = SessionPhase.complete);
+
     final log = SessionLog(
       id: '',
       userId: FirebaseAuth.instance.currentUser!.uid,
       sessionName: widget.config.name,
-      setsCompleted: stopped ? _currentSet - 1 : widget.config.sets,
+      // Use _setsCompleted (incremented only when a work phase finishes)
+      // rather than _currentSet which reflects the set currently in progress.
+      setsCompleted: stopped ? _setsCompleted : widget.config.sets,
       totalSets: widget.config.sets,
       durationSeconds: _totalElapsed,
       completedAt: DateTime.now(),
@@ -162,6 +179,8 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
     );
     await _firestoreService.saveSessionLog(log);
   }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   String _formatTime(int seconds) {
     final m = seconds ~/ 60;
@@ -171,29 +190,43 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
 
   Color get _phaseColor {
     switch (_phase) {
-      case SessionPhase.work: return const Color(0xFF00E5FF);
-      case SessionPhase.rest: return const Color(0xFF69FF47);
-      case SessionPhase.complete: return const Color(0xFFFFD700);
-      default: return Colors.white54;
+      case SessionPhase.work:
+        return const Color(0xFF00E5FF);
+      case SessionPhase.rest:
+        return const Color(0xFF69FF47);
+      case SessionPhase.complete:
+        return const Color(0xFFFFD700);
+      default:
+        return Colors.white54;
     }
   }
 
   String get _phaseLabel {
     switch (_phase) {
-      case SessionPhase.work: return 'WORK';
-      case SessionPhase.rest: return 'REST';
-      case SessionPhase.complete: return 'DONE!';
-      default: return 'READY';
+      case SessionPhase.work:
+        return 'WORK';
+      case SessionPhase.rest:
+        return 'REST';
+      case SessionPhase.complete:
+        return 'DONE!';
+      default:
+        return 'READY';
     }
   }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _showCueFlash ? _phaseColor.withOpacity(0.3) : const Color(0xFF0D1117),
+      backgroundColor: _showCueFlash
+          ? _phaseColor.withOpacity(0.3)
+          : const Color(0xFF0D1117),
       body: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        color: _showCueFlash ? _phaseColor.withOpacity(0.25) : Colors.transparent,
+        color: _showCueFlash
+            ? _phaseColor.withOpacity(0.25)
+            : Colors.transparent,
         child: SafeArea(
           child: _phase == SessionPhase.complete
               ? _buildCompleteView()
@@ -210,11 +243,14 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.timer_outlined, size: 80, color: Color(0xFF00E5FF)),
+          const Icon(Icons.timer_outlined,
+              size: 80, color: Color(0xFF00E5FF)),
           const SizedBox(height: 24),
           Text(widget.config.name,
               style: const TextStyle(
-                  color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold),
               textAlign: TextAlign.center),
           const SizedBox(height: 12),
           Text(
@@ -237,13 +273,15 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
                       spreadRadius: 5)
                 ],
               ),
-              child: const Icon(Icons.play_arrow, size: 56, color: Colors.black),
+              child:
+                  const Icon(Icons.play_arrow, size: 56, color: Colors.black),
             ),
           ),
           const SizedBox(height: 32),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Back', style: TextStyle(color: Colors.white38)),
+            child: const Text('Back',
+                style: TextStyle(color: Colors.white38)),
           ),
         ],
       ),
@@ -260,14 +298,17 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
         Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('Set $_currentSet of ${widget.config.sets}',
-                      style: const TextStyle(color: Colors.white54, fontSize: 16)),
+                      style: const TextStyle(
+                          color: Colors.white54, fontSize: 16)),
                   Text(widget.config.name,
-                      style: const TextStyle(color: Colors.white38, fontSize: 14)),
+                      style: const TextStyle(
+                          color: Colors.white38, fontSize: 14)),
                 ],
               ),
             ),
@@ -293,7 +334,6 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
               }),
             ),
             const Spacer(),
-            // Phase label
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 300),
               style: TextStyle(
@@ -344,9 +384,9 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
               ),
             ),
             const Spacer(),
-            // Controls
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 40),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 40, vertical: 40),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -364,12 +404,9 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
             ),
           ],
         ),
-        // Cue flash overlay
         if (_showCueFlash)
           Positioned.fill(
-            child: Container(
-              color: _phaseColor.withOpacity(0.15),
-            ),
+            child: Container(color: _phaseColor.withOpacity(0.15)),
           ),
       ],
     );
@@ -433,7 +470,8 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
                   fontSize: 28,
                   fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
-          Text('${widget.config.sets} sets · ${_formatTime(_totalElapsed)} total',
+          Text(
+              '${widget.config.sets} sets · ${_formatTime(_totalElapsed)} total',
               style: const TextStyle(color: Colors.white54, fontSize: 16)),
           const SizedBox(height: 48),
           ElevatedButton(
@@ -441,12 +479,14 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF00E5FF),
               foregroundColor: Colors.black,
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 40, vertical: 16),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
             ),
             child: const Text('Back to Dashboard',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 16)),
           ),
         ],
       ),

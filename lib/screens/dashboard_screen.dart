@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/session_config.dart';
 import '../services/firestore_service.dart';
 import 'training_session_screen.dart';
@@ -203,6 +202,14 @@ class _SessionCard extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.white38, size: 20),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => CreateSessionScreen(existing: session)),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.white24, size: 20),
               onPressed: () => _confirmDelete(context),

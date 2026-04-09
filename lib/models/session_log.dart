@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class SessionLog {
   final String id;
   final String userId;
@@ -27,7 +29,7 @@ class SessionLog {
       setsCompleted: map['setsCompleted'] ?? 0,
       totalSets: map['totalSets'] ?? 0,
       durationSeconds: map['durationSeconds'] ?? 0,
-      completedAt: (map['completedAt'] as dynamic)?.toDate() ?? DateTime.now(),
+      completedAt: (map['completedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       completed: map['completed'] ?? false,
     );
   }
@@ -38,7 +40,7 @@ class SessionLog {
         'setsCompleted': setsCompleted,
         'totalSets': totalSets,
         'durationSeconds': durationSeconds,
-        'completedAt': completedAt,
+        'completedAt': Timestamp.fromDate(completedAt),
         'completed': completed,
       };
 }

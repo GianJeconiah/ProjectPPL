@@ -14,8 +14,8 @@ class CueService {
 
   Future<void> playHapticCue() async {
     try {
-      final hasVibrator = await Vibration.hasVibrator() ?? false;
-      if (hasVibrator) {
+      final hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator == true) {
         Vibration.vibrate(duration: 200);
       }
     } catch (_) {}
@@ -33,8 +33,8 @@ class CueService {
         // Visual cue is handled by the UI
         break;
       case 'all':
-        await playAudioCue();
-        await playHapticCue();
+        // Run audio and haptic concurrently so haptic isn't delayed by audio.
+        await Future.wait([playAudioCue(), playHapticCue()]);
         break;
     }
   }

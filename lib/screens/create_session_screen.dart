@@ -19,6 +19,13 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   String _cueType = 'all';
   bool _saving = false;
 
+  // Work duration in minutes and seconds
+  int _workMinutes = 0;
+  int _workSecs = 30;
+  // Rest duration in minutes and seconds
+  int _restMinutes = 0;
+  int _restSecs = 10;
+
   @override
   void initState() {
     super.initState();
@@ -26,10 +33,18 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       final e = widget.existing!;
       _nameController.text = e.name;
       _sets = e.sets;
-      _workSeconds = e.workSeconds;
-      _restSeconds = e.restSeconds;
+      _workMinutes = e.workSeconds ~/ 60;
+      _workSecs = e.workSeconds % 60;
+      _restMinutes = e.restSeconds ~/ 60;
+      _restSecs = e.restSeconds % 60;
       _cueType = e.cueType;
     }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
   }
 
   Future<void> _save() async {
@@ -39,6 +54,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       return;
     }
     setState(() => _saving = true);
+    _workSeconds = _workMinutes * 60 + _workSecs;
+    _restSeconds = _restMinutes * 60 + _restSecs;
+    
     final config = SessionConfig(
       id: widget.existing?.id ?? '',
       name: _nameController.text.trim(),
@@ -79,10 +97,22 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             _stepper(_sets, (v) => setState(() => _sets = v), 1, 20),
             const SizedBox(height: 24),
             _label('Work Duration'),
-            _timeSelector(_workSeconds, (v) => setState(() => _workSeconds = v)),
+            _dualTimeInput(
+              minutes: _workMinutes,
+              seconds: _workSecs,
+              onMinutesChanged: (v) => setState(() => _workMinutes = v),
+              onSecondsChanged: (v) => setState(() => _workSecs = v),
+              label: 'Work',
+            ),
             const SizedBox(height: 24),
             _label('Rest Duration'),
-            _timeSelector(_restSeconds, (v) => setState(() => _restSeconds = v)),
+            _dualTimeInput(
+              minutes: _restMinutes,
+              seconds: _restSecs,
+              onMinutesChanged: (v) => setState(() => _restMinutes = v),
+              onSecondsChanged: (v) => setState(() => _restSecs = v),
+              label: 'Rest',
+            ),
             const SizedBox(height: 24),
             _label('Cue Type'),
             _cueSelector(),
@@ -152,31 +182,113 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     );
   }
 
-  Widget _timeSelector(int seconds, Function(int) onChanged) {
-    final options = [10, 15, 20, 30, 45, 60, 90, 120, 180, 300];
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((s) {
-        final selected = s == seconds;
-        final label = s >= 60 ? '${s ~/ 60}m' : '${s}s';
-        return GestureDetector(
-          onTap: () => onChanged(s),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? const Color(0xFF00E5FF) : const Color(0xFF161B22),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                  color: selected ? const Color(0xFF00E5FF) : Colors.white12),
-            ),
-            child: Text(label,
-                style: TextStyle(
-                    color: selected ? Colors.black : Colors.white70,
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+  Widget _dualTimeInput({
+    required int minutes,
+    required int seconds,
+    required Function(int) onMinutesChanged,
+    required Function(int) onSecondsChanged,
+    required String label,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: Column(
+                  children: [
+                    Text('Minutes',
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 12)),
+                    const SizedBox(height: 8),
+                    _timeCounter(
+                      value: minutes,
+                      onChanged: onMinutesChanged,
+                      max: 59,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  children: [
+                    Text('Seconds',
+                        style: const TextStyle(
+                            color: Colors.white54, fontSize: 12)),
+                    const SizedBox(height: 8),
+                    _timeCounter(
+                      value: seconds,
+                      onChanged: onSecondsChanged,
+                      max: 59,
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-        );
-      }).toList(),
+          const SizedBox(height: 12),
+          Text(
+            'Total: ${minutes}m ${seconds}s',
+            style: const TextStyle(
+                color: Color(0xFF00E5FF),
+                fontSize: 16,
+                fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _timeCounter({
+    required int value,
+    required Function(int) onChanged,
+    required int max,
+  }) {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.remove_circle_outline,
+              color: Color(0xFF00E5FF), size: 24),
+          onPressed: value > 0 ? () => onChanged(value - 1) : null,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D1117),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              value.toString().padLeft(2, '0'),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Color(0xFF00E5FF),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline,
+              color: Color(0xFF00E5FF), size: 24),
+          onPressed: value < max ? () => onChanged(value + 1) : null,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+      ],
     );
   }
 
@@ -197,7 +309,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: selected
-                  ? const Color(0xFF00E5FF).withOpacity(0.1)
+                  ? const Color(0xFF00E5FF).withValues(alpha: 0.1)
                   : const Color(0xFF161B22),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(

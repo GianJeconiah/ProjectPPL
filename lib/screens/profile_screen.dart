@@ -11,7 +11,6 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nameController = TextEditingController();
-  String _role = 'athlete';
   bool _loading = true;
   bool _saving = false;
   final _service = FirestoreService();
@@ -22,35 +21,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfile();
   }
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadProfile() async {
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    final data = await _service.getUserProfile(uid);
-    if (mounted && data != null) {
-      setState(() {
-        _nameController.text = data['name'] ?? '';
-        _role = data['role'] ?? 'athlete';
-        _loading = false;
-      });
-    } else {
-      setState(() => _loading = false);
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      final data = await _service.getUserProfile(uid);
+      if (mounted) {
+        setState(() {
+          if (data != null) {
+            _nameController.text = data['name'] ?? '';
+          }
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    final uid = FirebaseAuth.instance.currentUser!.uid;
-    await _service.saveUserProfile(uid, {
-      'name': _nameController.text.trim(),
-      'role': _role,
-      'email': FirebaseAuth.instance.currentUser!.email,
-    });
-    if (mounted) {
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile saved'),
-            backgroundColor: Color(0xFF161B22),
-          ));
+    try {
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      await _service.saveUserProfile(uid, {
+        'name': _nameController.text.trim(),
+        'email': FirebaseAuth.instance.currentUser!.email,
+      });
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Profile saved'),
+              backgroundColor: Color(0xFF161B22),
+            ));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error saving profile: ${e.toString()}'),
+              backgroundColor: Colors.redAccent,
+            ));
+      }
     }
   }
 
@@ -102,56 +122,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     controller: _nameController,
                     style: const TextStyle(color: Colors.white),
                     decoration: _inputDecoration('Your name'),
-                  ),
-                  const SizedBox(height: 24),
-                  _sectionLabel('Role'),
-                  Row(
-                    children: ['athlete', 'coach'].map((r) {
-                      final selected = _role == r;
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () => setState(() => _role = r),
-                          child: Container(
-                            margin: EdgeInsets.only(
-                                right: r == 'athlete' ? 8 : 0),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            decoration: BoxDecoration(
-                              color: selected
-                                  ? const Color(0xFF00E5FF).withOpacity(0.15)
-                                  : const Color(0xFF161B22),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: selected
-                                      ? const Color(0xFF00E5FF)
-                                      : Colors.white12),
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  r == 'athlete'
-                                      ? Icons.directions_run
-                                      : Icons.sports,
-                                  color: selected
-                                      ? const Color(0xFF00E5FF)
-                                      : Colors.white38,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  r[0].toUpperCase() + r.substring(1),
-                                  style: TextStyle(
-                                      color: selected
-                                          ? const Color(0xFF00E5FF)
-                                          : Colors.white54,
-                                      fontWeight: selected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
