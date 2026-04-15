@@ -29,14 +29,22 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
   SessionPhase _phase = SessionPhase.idle;
   Timer? _timer;
   Timer? _cueTimer;
+
+  // ── Directional cue state ─────────────────────────────────────────────────
   bool _showCueFlash = false;
+  CueDirection? _cueDirection; // null = non-directional flash
+
   bool _paused = false;
   int _totalElapsed = 0;
   final _cueService = CueService();
   final _firestoreService = FirestoreService();
   late AnimationController _pulseController;
   late AnimationController _flashController;
+  late AnimationController _arrowScaleController;
   final _random = Random();
+
+  // All four directions to cycle through randomly
+  static const _directions = CueDirection.values;
 
   @override
   void initState() {
@@ -47,6 +55,13 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
       ..repeat(reverse: true);
     _flashController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 300));
+    _arrowScaleController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 250))
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _arrowScaleController.reverse();
+        }
+      });
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
@@ -56,6 +71,7 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
     _cueTimer?.cancel();
     _pulseController.dispose();
     _flashController.dispose();
+    _arrowScaleController.dispose();
     _cueService.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
@@ -89,9 +105,7 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
   void _onPhaseComplete() {
     _cueTimer?.cancel();
     if (_phase == SessionPhase.work) {
-      // Increment completed-set count now that this work phase is done.
       _setsCompleted++;
-
       if (_currentSet >= widget.config.sets) {
         _completeSession();
       } else {
@@ -113,23 +127,50 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
   }
 
   void _scheduleRandomCue() {
-    if (widget.config.workSeconds <= 2) return;
-    final delay = _random.nextInt(widget.config.workSeconds - 2) + 1;
+    _cueTimer?.cancel();
+    final min = widget.config.minCueInterval;
+    final max = widget.config.maxCueInterval;
+    if (min >= max) return;
+    final delay = min + _random.nextInt(max - min);
     _cueTimer = Timer(Duration(seconds: delay), () {
-      if (_phase == SessionPhase.work && !_paused) _triggerCue();
+      if (!mounted || _phase != SessionPhase.work || _paused) return;
+      _triggerCue();
+      _scheduleRandomCue(); // reschedule for the next cue within this set
     });
   }
 
-  void _triggerCue() {
+  // ── Directional cue logic ─────────────────────────────────────────────────
+
+  /// Pick a random direction (null = non-directional, for rest/phase transitions).
+  CueDirection _randomDirection() =>
+      _directions[_random.nextInt(_directions.length)];
+
+  void _triggerCue({bool directional = true}) {
+    // During work phase mid-set cues → use directional arrows.
+    // During phase transitions (rest ↔ work) → plain flash, no arrow.
+    final dir = (directional && _phase == SessionPhase.work)
+        ? _randomDirection()
+        : null;
+
     if (widget.config.cueType == 'visual' ||
         widget.config.cueType == 'all') {
-      setState(() => _showCueFlash = true);
+      setState(() {
+        _showCueFlash = true;
+        _cueDirection = dir;
+      });
       _flashController.forward(from: 0);
-      Future.delayed(const Duration(milliseconds: 400), () {
-        if (mounted) setState(() => _showCueFlash = false);
+      _arrowScaleController.forward(from: 0);
+      Future.delayed(const Duration(milliseconds: 600), () {
+        if (mounted) {
+          setState(() {
+            _showCueFlash = false;
+            _cueDirection = null;
+          });
+        }
       });
     }
-    _cueService.triggerCue(widget.config.cueType);
+
+    _cueService.triggerCue(widget.config.cueType, direction: dir);
   }
 
   void _togglePause() => setState(() => _paused = !_paused);
@@ -162,15 +203,13 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
 
   Future<void> _completeSession({bool stopped = false}) async {
     _timer?.cancel();
-    _cueTimer?.cancel(); // always cancel cue timer on completion
+    _cueTimer?.cancel();
     setState(() => _phase = SessionPhase.complete);
 
     final log = SessionLog(
       id: '',
       userId: FirebaseAuth.instance.currentUser!.uid,
       sessionName: widget.config.name,
-      // Use _setsCompleted (incremented only when a work phase finishes)
-      // rather than _currentSet which reflects the set currently in progress.
       setsCompleted: stopped ? _setsCompleted : widget.config.sets,
       totalSets: widget.config.sets,
       durationSeconds: _totalElapsed,
@@ -212,6 +251,66 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
       default:
         return 'READY';
     }
+  }
+
+  // ── Directional arrow widget ──────────────────────────────────────────────
+
+  static const _directionIcons = {
+    CueDirection.up: Icons.arrow_upward_rounded,
+    CueDirection.down: Icons.arrow_downward_rounded,
+    CueDirection.left: Icons.arrow_back_rounded,
+    CueDirection.right: Icons.arrow_forward_rounded,
+  };
+
+  static const _directionLabels = {
+    CueDirection.up: 'UP',
+    CueDirection.down: 'DOWN',
+    CueDirection.left: 'LEFT',
+    CueDirection.right: 'RIGHT',
+  };
+
+  Widget _buildDirectionalArrow(CueDirection direction, Color color) {
+    return ScaleTransition(
+      scale: Tween<double>(begin: 0.6, end: 1.0).animate(
+        CurvedAnimation(parent: _arrowScaleController, curve: Curves.elasticOut),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 140,
+            height: 140,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withOpacity(0.15),
+              border: Border.all(color: color.withOpacity(0.6), width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.4),
+                  blurRadius: 40,
+                  spreadRadius: 8,
+                ),
+              ],
+            ),
+            child: Icon(
+              _directionIcons[direction]!,
+              color: color,
+              size: 80,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _directionLabels[direction]!,
+            style: TextStyle(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 6,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -404,9 +503,19 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
             ),
           ],
         ),
+
+        // ── Directional cue overlay ─────────────────────────────────────────
         if (_showCueFlash)
           Positioned.fill(
             child: Container(color: _phaseColor.withOpacity(0.15)),
+          ),
+        if (_showCueFlash && _cueDirection != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Center(
+                child: _buildDirectionalArrow(_cueDirection!, _phaseColor),
+              ),
+            ),
           ),
       ],
     );

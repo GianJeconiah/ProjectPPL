@@ -6,9 +6,12 @@ class SessionConfig {
   final int sets;
   final int workSeconds;
   final int restSeconds;
-  final String cueType; // 'audio', 'visual', 'haptic', 'all'
+  final String cueType;
   final String userId;
   final DateTime createdAt;
+  // NEW: Randomization range in seconds
+  final int minCueInterval; 
+  final int maxCueInterval;
 
   SessionConfig({
     required this.id,
@@ -19,6 +22,8 @@ class SessionConfig {
     required this.cueType,
     required this.userId,
     required this.createdAt,
+    this.minCueInterval = 3, // Default values
+    this.maxCueInterval = 8,
   });
 
   factory SessionConfig.fromMap(Map<String, dynamic> map, String id) {
@@ -31,17 +36,20 @@ class SessionConfig {
       cueType: map['cueType'] ?? 'all',
       userId: map['userId'] ?? '',
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      minCueInterval: map['minCueInterval'] ?? 3,
+      maxCueInterval: map['maxCueInterval'] ?? 8,
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'name': name,
-        'sets': sets,
-        'workSeconds': workSeconds,
-        'restSeconds': restSeconds,
-        'cueType': cueType,
-        'userId': userId,
-        // Use Firestore Timestamp — writing a raw DateTime throws an error.
-        'createdAt': Timestamp.fromDate(createdAt),
-      };
+    'name': name,
+    'sets': sets,
+    'workSeconds': workSeconds,
+    'restSeconds': restSeconds,
+    'cueType': cueType,
+    'userId': userId,
+    'createdAt': Timestamp.fromDate(createdAt),
+    'minCueInterval': minCueInterval,
+    'maxCueInterval': maxCueInterval,
+  };
 }
