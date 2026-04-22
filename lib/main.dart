@@ -44,12 +44,12 @@ class CueWatchApp extends StatelessWidget {
           }
           
           if (snap.hasData) {
-            // User is logged in, check if onboarding is completed
-            return FutureBuilder<DocumentSnapshot>(
-              future: FirebaseFirestore.instance
+            // User is logged in, check if onboarding is completed using StreamBuilder
+            return StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance
                   .collection('users')
                   .doc(snap.data!.uid)
-                  .get(),
+                  .snapshots(),
               builder: (context, userSnap) {
                 if (userSnap.connectionState == ConnectionState.waiting) {
                   return const Scaffold(

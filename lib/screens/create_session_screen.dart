@@ -26,6 +26,10 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   int _restMinutes = 0;
   int _restSecs = 10;
 
+  // Randomization range (in seconds)
+  int _minGap = 3;
+  int _maxGap = 8;
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +42,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       _restMinutes = e.restSeconds ~/ 60;
       _restSecs = e.restSeconds % 60;
       _cueType = e.cueType;
+      _minGap = e.minCueInterval;
+      _maxGap = e.maxCueInterval;
     }
   }
 
@@ -53,6 +59,14 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
           const SnackBar(content: Text('Please enter a session name')));
       return;
     }
+    
+    // Validate randomization range
+    if (_minGap >= _maxGap) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Min gap must be less than max gap')));
+      return;
+    }
+    
     setState(() => _saving = true);
     _workSeconds = _workMinutes * 60 + _workSecs;
     _restSeconds = _restMinutes * 60 + _restSecs;
@@ -66,6 +80,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       cueType: _cueType,
       userId: FirebaseAuth.instance.currentUser!.uid,
       createdAt: widget.existing?.createdAt ?? DateTime.now(),
+      minCueInterval: _minGap,
+      maxCueInterval: _maxGap,
     );
     await FirestoreService().saveSessionConfig(config);
     if (mounted) Navigator.pop(context);
@@ -116,6 +132,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
             const SizedBox(height: 24),
             _label('Cue Type'),
             _cueSelector(),
+            const SizedBox(height: 24),
+            _label('Cue Randomization (Seconds)'),
+            _randomizationRangeInput(),
             const SizedBox(height: 40),
             SizedBox(
               width: double.infinity,
@@ -332,6 +351,108 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _randomizationRangeInput() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161B22),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Control when cues appear during work phases',
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Min Gap',
+                        style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    _stepper(_minGap, (v) {
+                      setState(() {
+                        _minGap = v;
+                        // Ensure max is always greater than min
+                        if (_maxGap <= _minGap) {
+                          _maxGap = _minGap + 1;
+                        }
+                      });
+                    }, 1, 60),
+                    const SizedBox(height: 4),
+                    Text('Min time before cue',
+                        style: const TextStyle(
+                            color: Colors.white38, fontSize: 10)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Max Gap',
+                        style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    _stepper(_maxGap, (v) {
+                      setState(() {
+                        _maxGap = v;
+                        // Ensure min is always less than max
+                        if (_minGap >= _maxGap) {
+                          _minGap = _maxGap - 1;
+                        }
+                      });
+                    }, 2, 60),
+                    const SizedBox(height: 4),
+                    Text('Max time before cue',
+                        style: const TextStyle(
+                            color: Colors.white38, fontSize: 10)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D1117),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                  color: const Color(0xFF00E5FF).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline,
+                    size: 16, color: const Color(0xFF00E5FF)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Cues will appear randomly between ${_minGap}s and ${_maxGap}s apart',
+                    style: const TextStyle(
+                        color: Color(0xFF00E5FF), fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

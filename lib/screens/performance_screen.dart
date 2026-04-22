@@ -17,6 +17,28 @@ class PerformanceScreen extends StatelessWidget {
       child: StreamBuilder<List<SessionLog>>(
         stream: service.getSessionLogs(userId),
         builder: (context, snap) {
+          // Check for errors
+          if (snap.hasError) {
+            return CustomScrollView(
+              slivers: [
+                SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text('Error loading performance: ${snap.error}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                )
+              ],
+            );
+          }
+          
           final logs = snap.data ?? [];
 
           return CustomScrollView(

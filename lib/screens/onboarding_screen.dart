@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
 import '../services/firestore_service.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -60,22 +61,48 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     setState(() => _saving = true);
 
-    final userId = FirebaseAuth.instance.currentUser!.uid;
-    await FirestoreService().saveUserProfile(userId, {
-      'name': _nameController.text.trim(),
-      'age': _age,
-      'weight': _weight,
-      'gender': _gender,
-      'goal': _goal,
-      'experienceLevel': _experienceLevel,
-      'email': FirebaseAuth.instance.currentUser!.email,
-      'onboardingCompleted': true,
-      'createdAt': DateTime.now(),
-    });
+    try {
+      final userId = FirebaseAuth.instance.currentUser!.uid;
+      
+      // Save with timeout to prevent infinite loading
+      await FirestoreService().saveUserProfile(userId, {
+        'name': _nameController.text.trim(),
+        'age': _age,
+        'weight': _weight,
+        'gender': _gender,
+        'goal': _goal,
+        'experienceLevel': _experienceLevel,
+        'email': FirebaseAuth.instance.currentUser!.email,
+        'onboardingCompleted': true,
+        'createdAt': DateTime.now(),
+      }).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Firebase save operation timed out. Check your internet connection.');
+        },
+      );
 
-    if (mounted) {
-      // Navigate to dashboard - the StreamBuilder in main will handle this
-      Navigator.of(context).pop();
+      if (mounted) {
+        setState(() => _saving = false);
+        // The StreamBuilder in main.dart will automatically navigate to dashboard
+        // No need to pop - just wait for the Firestore data to trigger the rebuild
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        String errorMessage = e.toString();
+        if (e is TimeoutException) {
+          errorMessage = 'Connection timeout. Check your internet and try again.';
+        } else if (errorMessage.contains('PERMISSION_DENIED')) {
+          errorMessage = 'Permission denied. Check Firestore rules.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $errorMessage'),
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 

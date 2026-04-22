@@ -115,6 +115,24 @@ class _HomeTab extends StatelessWidget {
                   return const Center(
                       child: CircularProgressIndicator(color: Color(0xFF00E5FF)));
                 }
+                
+                // Check for errors
+                if (snap.hasError) {
+                  print('❌ StreamBuilder Error: ${snap.error}');
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 64, color: Colors.red),
+                        const SizedBox(height: 16),
+                        Text('Error loading sessions: ${snap.error}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      ],
+                    ),
+                  );
+                }
+                
                 final sessions = snap.data ?? [];
                 if (sessions.isEmpty) {
                   return Center(

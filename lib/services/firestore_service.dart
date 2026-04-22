@@ -7,21 +7,38 @@ class FirestoreService {
 
   // Session configs
   Stream<List<SessionConfig>> getSessionConfigs(String userId) {
+    print('🔵 Fetching sessions for userId: $userId');
     return _db
         .collection('sessions')
         .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => SessionConfig.fromMap(d.data(), d.id))
-            .toList());
+        .map((snap) {
+          print('📊 Found ${snap.docs.length} sessions');
+          // Sort client-side instead of in Firestore
+          final sessions = snap.docs
+              .map((d) {
+                print('Session: ${d.data()}');
+                return SessionConfig.fromMap(d.data(), d.id);
+              })
+              .toList();
+          sessions.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return sessions;
+        });
   }
 
   Future<void> saveSessionConfig(SessionConfig config) async {
-    if (config.id.isEmpty) {
-      await _db.collection('sessions').add(config.toMap());
-    } else {
-      await _db.collection('sessions').doc(config.id).set(config.toMap());
+    try {
+      print('🔵 Saving session config: ${config.name} for userId: ${config.userId}');
+      if (config.id.isEmpty) {
+        await _db.collection('sessions').add(config.toMap());
+        print('✅ Session created successfully');
+      } else {
+        await _db.collection('sessions').doc(config.id).set(config.toMap());
+        print('✅ Session updated successfully');
+      }
+    } catch (e) {
+      print('❌ Error saving session: $e');
+      rethrow;
     }
   }
 
@@ -31,14 +48,23 @@ class FirestoreService {
 
   // Session logs
   Stream<List<SessionLog>> getSessionLogs(String userId) {
+    print('🔵 Fetching session logs for userId: $userId');
     return _db
         .collection('session_logs')
         .where('userId', isEqualTo: userId)
-        .orderBy('completedAt', descending: true)
-        .limit(30)
         .snapshots()
-        .map((snap) =>
-            snap.docs.map((d) => SessionLog.fromMap(d.data(), d.id)).toList());
+        .map((snap) {
+          print('📊 Found ${snap.docs.length} session logs');
+          // Sort client-side instead of in Firestore
+          final logs = snap.docs
+              .map((d) {
+                print('Log: ${d.data()}');
+                return SessionLog.fromMap(d.data(), d.id);
+              })
+              .toList();
+          logs.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+          return logs.take(30).toList();
+        });
   }
 
   Future<void> saveSessionLog(SessionLog log) async {
@@ -52,6 +78,14 @@ class FirestoreService {
   }
 
   Future<void> saveUserProfile(String userId, Map<String, dynamic> data) async {
-    await _db.collection('users').doc(userId).set(data, SetOptions(merge: true));
+    try {
+      print('🔵 Saving user profile for $userId...');
+      print('📊 Data: $data');
+      await _db.collection('users').doc(userId).set(data, SetOptions(merge: true));
+      print('✅ User profile saved successfully');
+    } catch (e) {
+      print('❌ Error saving user profile: $e');
+      rethrow;
+    }
   }
 }

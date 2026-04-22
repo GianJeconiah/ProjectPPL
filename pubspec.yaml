@@ -28,3 +28,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/audio/cue_up.mp3
+    - assets/audio/cue_down.mp3
+    - assets/audio/cue_left.mp3
+    - assets/audio/cue_right.mp3
+    - assets/audio/beep.mp3

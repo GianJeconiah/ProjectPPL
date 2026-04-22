@@ -103,7 +103,9 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
   }
 
   void _onPhaseComplete() {
+    // Cancel any pending random cues when phase completes
     _cueTimer?.cancel();
+    
     if (_phase == SessionPhase.work) {
       _setsCompleted++;
       if (_currentSet >= widget.config.sets) {
@@ -114,6 +116,7 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
           _phase = SessionPhase.rest;
           _secondsLeft = widget.config.restSeconds;
         });
+        // No cue scheduling during rest phase
       }
     } else if (_phase == SessionPhase.rest) {
       _triggerCue();
@@ -122,6 +125,7 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
         _phase = SessionPhase.work;
         _secondsLeft = widget.config.workSeconds;
       });
+      // Restart the randomization loop for the new work phase
       _scheduleRandomCue();
     }
   }
@@ -130,12 +134,30 @@ class _TrainingSessionScreenState extends State<TrainingSessionScreen>
     _cueTimer?.cancel();
     final min = widget.config.minCueInterval;
     final max = widget.config.maxCueInterval;
+    
+    // Validation: ensure max > min
     if (min >= max) return;
+    
+    // Calculate random delay: minGap + random(maxGap - minGap)
+    // This ensures the cue appears at minimum after minGap seconds,
+    // and at maximum after maxGap seconds
     final delay = min + _random.nextInt(max - min);
+    
     _cueTimer = Timer(Duration(seconds: delay), () {
-      if (!mounted || _phase != SessionPhase.work || _paused) return;
+      // Only trigger if still in work phase and not paused
+      if (!mounted || _phase != SessionPhase.work) return;
+      
+      // If paused when timer fires, skip this cue and schedule the next one
+      if (_paused) {
+        _scheduleRandomCue();
+        return;
+      }
+      
       _triggerCue();
-      _scheduleRandomCue(); // reschedule for the next cue within this set
+      
+      // Immediately reschedule the next cue - this creates a continuous loop
+      // The min gap timer starts from zero right after this cue fires
+      _scheduleRandomCue();
     });
   }
 
